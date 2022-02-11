@@ -1,0 +1,39 @@
+steps:
+#CloudFunction
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+  - functions
+  - deploy
+  - load_amplitude_api_data_to_bq
+  - --source=https://source.developers.google.com/projects/qa-mfrm-data/repos/github_mattressfirm_gcp-ops/moveable-aliases/qa/paths/Cloud-Functions/load_amplitude_api_data_to_bq
+#  - --trigger-bucket=qa-mfrm-data-bucket
+  - --trigger-topic=load_amplitude_api_data_to_bq
+  - --max-instances=1
+  - --region=us-central1
+  - --entry-point=load_amplitude_api_data_to_bq
+  - --memory=4096
+  - --retry
+  - --service-account=svc-cloudfunction@qa-mfrm-data.iam.gserviceaccount.com
+  - --timeout=540
+  - --runtime=python37
+
+#BigQuery
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args: ['-c', 'bq query --use_legacy_sql=false < ./BigQuery/DML/US_56338_Amplitude_Data_DML_1.sql'] 
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args: ['-c', 'bq query --use_legacy_sql=false < ./BigQuery/storedProcedure/sp_load_amplitude_api_data.sql']
+
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  id: Deploy
+  entrypoint: bash
+  args: ['-c', 'gcloud scheduler jobs create pubsub load_amplitude_api_data_to_bq --schedule "30 10 * * *" --time-zone="America/Chicago" --topic projects/qa-mfrm-data/topics/load_amplitude_api_data_to_bq --message-body="amplitude api triggered"']
+
+#DAG
+#- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+#  id: Deploy
+#  entrypoint: bash
+#  args: ['-c', 'gsutil -m rsync -n -r ./Cloud-Composer gs://${_COMPOSER_BUCKET}/dags']
+#substitutions:
+#    _COMPOSER_BUCKET: us-central1-mfrm-pipeline-c-7bd1685f-bucket
